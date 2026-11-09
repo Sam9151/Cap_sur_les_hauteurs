@@ -1,0 +1,654 @@
+<title>Cap sur les hauteurs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Big+Shoulders+Display:wght@800;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one-screen game. ISO safety-sign colours (blue sea, safe green, warning yellow, alert orange)
+   on a topographic-map canvas with altitude bands. One committed light theme, set explicitly. */
+:root{
+  --paper:#E8EEF2; --paper-2:#F6F9FB; --ink:#0D2A3B; --ink-2:#3F5766; --line:#C3D2DC;
+  --sea:#1E6FA3; --sea-soft:#DCEAF3; --safe:#12915A; --safe-ink:#0B6B42; --safe-soft:#D2EEDF;
+  --warn:#F2B705; --warn-soft:#FBEBB0; --alert:#E8501F; --alert-soft:#FAD8CC;
+  --b0:#DCE8C4; --b1:#CBDFAF; --b2:#B8D49A; --b3:#8CC593;
+  --f-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --f-body:'Atkinson Hyperlegible',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+html,body{height:100%}
+body{
+  box-sizing:border-box; margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:16px; line-height:1.45;
+  padding-block:10px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  -webkit-tap-highlight-color:transparent;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+#app{height:100%; max-width:520px; margin:0 auto; display:flex; flex-direction:column}
+.screen{flex:1; min-height:0; display:flex; flex-direction:column}
+p{margin:0 0 10px}
+.eyebrow{font:600 11px/1.3 var(--f-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2); margin:0}
+h1,h2{font-family:var(--f-display); font-weight:900; text-transform:uppercase; margin:0; text-wrap:balance}
+h1{font-size:clamp(48px,16vw,84px); line-height:.88; letter-spacing:.005em}
+h1 em{font-style:normal; color:var(--safe-ink)}
+h2{font-size:38px; line-height:.95; letter-spacing:.01em; margin:2px 0 12px}
+
+/* Start screen */
+.start{overflow-y:auto; gap:14px; padding-bottom:10px; min-width:0}
+.hero{display:block; width:100%; height:auto; border:2px solid var(--ink); border-radius:12px; background:var(--b0)}
+.hero text{font:600 9px var(--f-mono); fill:var(--ink)}
+.lead{font-size:18px; max-width:38ch; margin:0}
+.legend{list-style:none; margin:0; padding:0; display:grid; gap:10px}
+.legend li{display:grid; grid-template-columns:40px minmax(0,1fr); gap:12px; align-items:center}
+.legend svg{width:40px; height:40px}
+.legend b{font-weight:700}
+
+.btn{
+  font:900 26px/1 var(--f-display); text-transform:uppercase; letter-spacing:.05em;
+  background:var(--warn); color:var(--ink); border:2px solid var(--ink); border-radius:10px;
+  min-height:56px; padding:0 24px; cursor:pointer; box-shadow:0 4px 0 var(--ink);
+}
+.btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--ink)}
+.btn:focus-visible,.opt:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid var(--sea); outline-offset:3px}
+.btn.block{width:100%}
+.btn.ghost{background:var(--paper-2); font-size:20px; min-height:48px}
+
+.teacher{border:2px dashed var(--ink-2); border-radius:10px; padding:10px 12px; background:var(--paper-2)}
+.teacher summary{font:600 12px var(--f-mono); letter-spacing:.1em; text-transform:uppercase; cursor:pointer}
+.teacher p{font-size:15px; margin:10px 0 8px}
+.teacher .row{display:flex; gap:8px; flex-wrap:wrap}
+.teacher input{flex:1 1 200px; min-width:0; font:500 14px var(--f-mono); padding:10px; border:2px solid var(--ink); border-radius:8px; background:#fff; color:var(--ink)}
+.teacher .btn{font-size:18px; min-height:44px; padding:0 16px; box-shadow:0 3px 0 var(--ink)}
+#qr-box{display:flex; justify-content:center; margin-top:10px}
+#qr-box:not(:empty){background:#fff; padding:14px; border:2px solid var(--ink); border-radius:10px; width:max-content; max-width:100%; margin-inline:auto}
+#qr-box img,#qr-box canvas{max-width:100%; height:auto}
+#qr-msg{font-size:14px; color:var(--ink-2); margin:8px 0 0}
+
+/* Play screen */
+.hud{display:grid; grid-template-columns:.8fr 1fr 1.2fr; gap:6px; margin-bottom:8px}
+.cell{background:var(--paper-2); border:2px solid var(--ink); border-radius:8px; padding:5px 9px 4px; min-width:0}
+.cell .k{display:block; font:600 9px/1.2 var(--f-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2)}
+.cell .v{display:block; font:900 26px/1.05 var(--f-display); letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums}
+.cell.ok{background:var(--safe-soft)}
+.cell.warn{background:var(--warn-soft)}
+.cell.bad{background:var(--alert-soft)}
+.stage{position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:var(--paper-2); border:2px solid var(--ink); border-radius:12px; overflow:hidden}
+#cv{display:block; touch-action:none; user-select:none; -webkit-user-select:none}
+.banner{
+  position:absolute; top:8px; left:8px; right:8px; z-index:2; pointer-events:none;
+  text-align:center; padding:8px 10px 11px; font:900 21px/1.05 var(--f-display); text-transform:uppercase; letter-spacing:.04em;
+  background:var(--warn); color:var(--ink); border:2px solid var(--ink); border-radius:8px; text-wrap:balance;
+}
+.banner::after{content:""; position:absolute; left:0; right:0; bottom:0; height:5px; background:repeating-linear-gradient(-45deg,var(--ink) 0 8px,var(--warn) 8px 16px)}
+.banner.ok{background:var(--safe); color:#fff}
+.banner.ok::after{background:repeating-linear-gradient(-45deg,#fff 0 8px,var(--safe) 8px 16px)}
+.banner.pulse{animation:pulse .7s ease-in-out infinite alternate}
+@keyframes pulse{from{transform:none}to{transform:translateY(2px)}}
+.toast{
+  position:absolute; left:12px; right:12px; bottom:12px; z-index:2; pointer-events:none;
+  background:var(--ink); color:var(--paper-2); border-radius:10px; padding:10px 12px; font-weight:700; text-align:center;
+}
+.modal{position:absolute; inset:0; z-index:5; display:flex; background:rgba(13,42,59,.74); padding:12px; overflow-y:auto}
+.card{position:relative; margin:auto; width:100%; max-width:420px; background:var(--paper-2); border:2px solid var(--ink); border-radius:12px; padding:0 16px 16px; overflow:hidden}
+.stripe{height:12px; margin:0 -16px 14px; background:repeating-linear-gradient(-45deg,var(--warn) 0 12px,var(--ink) 12px 24px)}
+.stripe.ok{background:repeating-linear-gradient(-45deg,var(--safe) 0 12px,var(--ink) 12px 24px)}
+.stripe.bad{background:repeating-linear-gradient(-45deg,var(--alert) 0 12px,var(--ink) 12px 24px)}
+.goal{background:var(--sea-soft); border-radius:8px; padding:9px 11px}
+.hint{font-size:15px; color:var(--ink-2)}
+.stars{display:flex; gap:6px; margin:0 0 8px}
+.star{width:38px; height:38px; fill:#fff; stroke:var(--ink); stroke-width:1.5; stroke-linejoin:round}
+.star.on{fill:var(--warn)}
+.checks{list-style:none; margin:0 0 12px; padding:0; display:grid; gap:4px; font-size:15px}
+.checks li{display:grid; grid-template-columns:20px minmax(0,1fr); gap:6px}
+.checks li::before{content:"\2713"; font-weight:700; color:var(--safe-ink)}
+.checks li.no{color:var(--ink-2)}
+.checks li.no::before{content:"\2715"; color:var(--alert)}
+.q-label{font:600 11px var(--f-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--sea); margin:0 0 4px}
+.q{font-weight:700; font-size:18px; margin:0 0 4px}
+.opt{display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; width:100%; text-align:left; font:700 16px/1.3 var(--f-body); color:var(--ink); padding:11px 12px; min-height:48px; margin-top:8px; border:2px solid var(--ink); border-radius:10px; background:#fff; cursor:pointer}
+.opt .l{font:600 14px var(--f-mono); color:var(--sea)}
+.opt:disabled{cursor:default}
+.opt.right{background:var(--safe-soft); border-color:var(--safe-ink)}
+.opt.wrong{background:var(--alert-soft); border-color:var(--alert)}
+.after{margin-top:14px; display:grid; gap:10px}
+.after p{margin:0}
+.verdict{font:900 26px/1 var(--f-display); text-transform:uppercase; letter-spacing:.03em}
+.fact{background:var(--sea-soft); border-radius:10px; padding:10px 12px}
+.fact .tag{display:inline-block; font:600 11px var(--f-mono); letter-spacing:.1em; text-transform:uppercase; background:var(--sea); color:#fff; padding:2px 8px; border-radius:4px; margin-bottom:6px}
+.fact p{font-size:15px}
+
+/* End screen */
+.end{overflow-y:auto; gap:14px; padding-bottom:10px}
+.score{display:flex; gap:10px; flex-wrap:wrap}
+.score div{flex:1 1 140px; background:var(--paper-2); border:2px solid var(--ink); border-radius:10px; padding:8px 12px}
+.score .k{display:block; font:600 10px var(--f-mono); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2)}
+.score .v{font:900 34px/1 var(--f-display)}
+.rules{margin:0; padding:0; list-style:none; display:grid; gap:8px}
+.rules li{display:grid; grid-template-columns:34px minmax(0,1fr); gap:10px; align-items:start; background:var(--paper-2); border:2px solid var(--ink); border-radius:10px; padding:10px 12px}
+.rules .n{font:900 28px/1 var(--f-display); color:var(--safe-ink)}
+.rules b{display:block}
+
+@media (prefers-reduced-motion:reduce){ .banner.pulse{animation:none} }
+</style>
+
+<div id="app">
+
+  <section id="start" class="screen start">
+    <p class="eyebrow">Géographie · Séismes et tsunamis</p>
+    <h1>Cap sur<br>les <em>hauteurs</em></h1>
+    <svg class="hero" viewBox="0 0 360 170" role="img" aria-label="Carte en courbes de niveau : un personnage monte depuis la mer vers la zone sûre, à 30 mètres d’altitude">
+      <defs>
+        <pattern id="hatch" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="12" stroke="#fff" stroke-opacity=".4" stroke-width="3"/></pattern>
+      </defs>
+      <rect width="360" height="170" fill="var(--b0)"/>
+      <path d="M0 0H360V118C300 112 250 126 190 120C130 114 70 126 0 118Z" fill="var(--b1)"/>
+      <path d="M0 0H360V80C300 74 250 88 190 82C130 76 70 88 0 80Z" fill="var(--b2)"/>
+      <path d="M0 0H360V42H0Z" fill="var(--b3)"/>
+      <path d="M0 0H360V42H0Z" fill="url(#hatch)"/>
+      <path d="M0 118C70 126 130 114 190 120C250 126 300 112 360 118" fill="none" stroke="var(--ink)" stroke-opacity=".3"/>
+      <path d="M0 80C70 88 130 76 190 82C250 88 300 74 360 80" fill="none" stroke="var(--ink)" stroke-opacity=".3"/>
+      <line x1="0" y1="42" x2="360" y2="42" stroke="var(--safe-ink)" stroke-width="3" stroke-dasharray="8 6"/>
+      <text x="8" y="36">30 m · ZONE SÛRE</text>
+      <text x="8" y="76">20 m</text>
+      <text x="8" y="114">10 m</text>
+      <path d="M0 170V146C60 138 110 152 170 145C230 138 290 150 360 142V170Z" fill="var(--sea)"/>
+      <path d="M0 146C60 138 110 152 170 145C230 138 290 150 360 142" fill="none" stroke="#fff" stroke-width="3"/>
+      <path d="M176 128C190 108 206 98 214 80S230 56 240 34" fill="none" stroke="var(--ink)" stroke-width="2" stroke-dasharray="3 6" stroke-linecap="round"/>
+      <circle cx="176" cy="130" r="12" fill="var(--alert)" stroke="#fff" stroke-width="3"/>
+      <circle cx="176" cy="130" r="4.5" fill="#F6D7B5"/>
+      <line x1="244" y1="8" x2="244" y2="38" stroke="var(--ink)" stroke-width="2"/>
+      <path d="M244 8L264 15L244 23Z" fill="var(--safe)"/>
+    </svg>
+    <p class="lead">Un séisme secoue la côte et une vague arrive. Tu as quelques secondes pour monter à 30 mètres d’altitude.</p>
+    <ul class="legend">
+      <li>
+        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="14" fill="var(--alert)" stroke="var(--ink)" stroke-width="2"/><circle cx="20" cy="20" r="5.5" fill="#F6D7B5"/></svg>
+        <span><b>Toi.</b> Fais glisser ton doigt sur la carte : ton personnage court vers lui.</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 40 40" aria-hidden="true"><rect x="2" y="6" width="36" height="28" rx="4" fill="var(--b3)"/><line x1="2" y1="20" x2="38" y2="20" stroke="var(--safe-ink)" stroke-width="3" stroke-dasharray="6 4"/></svg>
+        <span><b>La ligne verte</b> marque 30 m d’altitude. Dépasse-la pour être en sécurité.</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="15" fill="var(--warn)" stroke="var(--ink)" stroke-width="2"/><rect x="18" y="10" width="4" height="13" rx="2" fill="var(--ink)"/><circle cx="20" cy="28" r="2.6" fill="var(--ink)"/></svg>
+        <span><b>Les pièges</b> te font perdre du temps. Ne t’arrête pas pour eux.</span>
+      </li>
+    </ul>
+    <button id="btn-play" class="btn block" type="button">Jouer</button>
+
+    <details class="teacher">
+      <summary>Espace enseignant</summary>
+      <p>3 niveaux, 3 questions, 5 à 8 minutes. Colle ici le lien de partage de ce jeu : le QR code s’affiche, prêt à être projeté en classe.</p>
+      <div class="row">
+        <input id="qr-url" type="url" inputmode="url" placeholder="https://…" aria-label="Lien de partage du jeu">
+        <button id="qr-make" class="btn" type="button">Créer le QR</button>
+      </div>
+      <div id="qr-box"></div>
+      <p id="qr-msg" role="status"></p>
+    </details>
+  </section>
+
+  <section id="play" class="screen" hidden>
+    <div class="hud">
+      <div class="cell"><span class="k">Niveau</span><span class="v" id="h-level">1/3</span></div>
+      <div class="cell"><span class="k">Altitude</span><span class="v" id="h-alt">0 m</span></div>
+      <div class="cell" id="h-wave"><span class="k">Vague dans</span><span class="v" id="h-wave-v">—</span></div>
+    </div>
+    <div class="stage" id="stage">
+      <canvas id="cv" aria-label="Carte du jeu : fais glisser ton doigt pour courir vers la zone sûre"></canvas>
+      <div id="banner" class="banner" role="status" hidden></div>
+      <div id="toast" class="toast" role="status" hidden></div>
+      <div id="modal" class="modal" hidden></div>
+    </div>
+  </section>
+
+  <section id="end" class="screen end" hidden></section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/*LOGIC-START*/
+const W=360,H=640,R=8,SHORE=560,SAFE=150,XMAX=326,TRAP_R=12;
+const altOf=y=>Math.max(0,Math.min(30,(SHORE-y)/(SHORE-SAFE)*30));
+const CARC=['#D6533B','#2F6DB5','#F2F2EE','#2E3A44','#E0A82E','#4C9A6A'];
+const car=(x,y,i)=>({x,y,w:34,h:20,c:CARC[i%CARC.length]});
+
+const LEVELS=[
+{
+  name:'Village de pêcheurs',
+  intro:'Tu ramasses des coquillages sur la plage d’un petit village de pêcheurs. Soudain, le sol se met à trembler : un séisme vient de secouer le fond de la mer, au large.',
+  goal:'Monte au-dessus de la ligne verte des 30 m avant que la vague te rattrape.',
+  hint:'Fais glisser ton doigt sur la carte : ton personnage court vers lui. Monter la pente te ralentit un peu.',
+  lostTip:'Pars dès la secousse, sans attendre. Plus tu montes tôt, plus tu as d’avance sur la vague.',
+  speed:72, quake:1.6, retreat:2.2, gapStar:150,
+  segs:[{to:196,speed:58}],
+  start:{x:180,y:546},
+  roads:[[[180,574],[180,505],[122,440],[122,330],[205,262],[205,140]]], bands:[],
+  sign:{x:206,y:530},
+  houses:[{x:28,y:392,w:62,h:48},{x:232,y:400,w:72,h:46},{x:26,y:262,w:62,h:48},{x:246,y:282,w:70,h:50},{x:122,y:176,w:60,h:40},{x:252,y:176,w:60,h:40}],
+  trees:[{x:148,y:492,r:12},{x:226,y:484,r:12},{x:300,y:350,r:13},{x:62,y:480,r:13},{x:296,y:520,r:12},{x:170,y:336,r:12},{x:40,y:200,r:12},{x:290,y:238,r:12},{x:70,y:340,r:11}],
+  cars:[], walls:[],
+  traps:[{x:70,y:592,t:'fish'},{x:160,y:606,t:'fish'},{x:256,y:598,t:'fish'},{x:316,y:610,t:'fish'},{x:148,y:528,t:'bag'}],
+  quiz:{
+    q:'La mer se retire très loin de la plage et laisse des poissons sur le sable. Que fais-tu ?',
+    opts:['Je vais ramasser des poissons.','Je cours vers les hauteurs sans attendre.','Je filme la scène depuis la plage.'],
+    ok:1,
+    explain:'Une forte secousse ou un retrait soudain de la mer sont des signes naturels d’alerte. Le tsunami peut arriver quelques minutes plus tard : il ne faut pas attendre l’alarme officielle.'
+  },
+  fact:'Le 26 décembre 2004, un séisme de magnitude supérieure à 9 au large de Sumatra a provoqué un tsunami dans tout l’océan Indien. Il a fait plus de 200 000 victimes. Dans de nombreuses régions, la population ne connaissait pas les signes qui annoncent un tsunami.'
+},
+{
+  name:'Ville côtière',
+  intro:'Tu es dans une ville au bord de l’océan. La secousse a été violente. La route qui monte vers la colline est bloquée par un embouteillage : les gens veulent tous partir en voiture.',
+  goal:'Traverse les deux rangées de voitures, puis monte au-dessus de la ligne verte.',
+  hint:'Cherche les espaces entre les voitures. Les objets posés au sol te ralentissent : contourne-les.',
+  lostTip:'Les voitures bloquent la route. À pied, tu peux passer partout : cherche vite les espaces entre elles.',
+  speed:72, quake:1.4, retreat:1.8, gapStar:60,
+  segs:[{to:184,speed:68}],
+  start:{x:170,y:548},
+  roads:[], bands:[{x:0,y:436,w:W,h:84}],
+  sign:null,
+  houses:[{x:14,y:352,w:80,h:58},{x:130,y:360,w:80,h:50},{x:248,y:352,w:72,h:58},{x:14,y:246,w:70,h:56},{x:116,y:252,w:90,h:50},{x:238,y:246,w:82,h:56},{x:20,y:176,w:100,h:34},{x:200,y:170,w:112,h:40}],
+  trees:[{x:300,y:300,r:12},{x:60,y:420,r:11}],
+  cars:[car(6,446,0),car(44,446,1),car(82,446,2),car(152,446,3),car(190,446,4),car(228,446,5),car(266,446,1),
+        car(6,492,2),car(76,492,0),car(114,492,3),car(152,492,5),car(226,492,1),car(264,492,4),car(302,492,0)],
+  walls:[],
+  traps:[{x:50,y:596,t:'fish'},{x:150,y:610,t:'fish'},{x:262,y:602,t:'fish'},{x:206,y:528,t:'bag'}],
+  quiz:{
+    q:'La route est bloquée par des voitures. Pour t’éloigner de la côte, le mieux est de :',
+    opts:['rouler le long de la côte.','attendre dans la voiture que ça avance.','laisser la voiture et monter à pied.'],
+    ok:2,
+    explain:'Les routes se bloquent très vite en cas d’évacuation. À pied, on passe partout, même là où les voitures ne passent pas.'
+  },
+  fact:'En plein océan, une vague de tsunami avance à plus de 700 km/h, aussi vite qu’un avion de ligne. Elle est alors si basse qu’un bateau ne la remarque presque pas. Près de la côte, elle ralentit mais devient beaucoup plus haute.'
+},
+{
+  name:'Plusieurs vagues',
+  intro:'Une première vague arrive sur le port, puis la mer recule. Tu as survécu au premier choc, mais un tsunami est souvent une série de vagues. Une digue te sépare de la colline.',
+  goal:'Passe la digue, puis monte au-dessus de la ligne verte sans t’arrêter.',
+  hint:'Quand la mer recule, ce n’est pas fini : la vague suivante peut monter plus haut que la première.',
+  lostTip:'Après la première vague, la mer se retire un moment. Mais la suivante monte plus haut. Il faut continuer à monter.',
+  speed:72, quake:1.2, retreat:1.4, gapStar:70,
+  segs:[{to:440,speed:76},{to:495,speed:34},{to:292,speed:74},{to:352,speed:34},{to:168,speed:80}],
+  start:{x:200,y:554},
+  roads:[], bands:[],
+  sign:{x:150,y:545},
+  houses:[{x:20,y:418,w:70,h:50},{x:150,y:410,w:84,h:46},{x:262,y:420,w:58,h:50},{x:30,y:300,w:80,h:46},{x:178,y:296,w:60,h:50},{x:268,y:282,w:52,h:56},{x:60,y:196,w:60,h:40},{x:196,y:190,w:70,h:38}],
+  trees:[{x:60,y:495,r:12},{x:290,y:495,r:12},{x:128,y:372,r:12},{x:250,y:372,r:12},{x:300,y:230,r:12},{x:30,y:240,r:12},{x:150,y:240,r:11}],
+  cars:[],
+  walls:[{x:0,y:520,w:68,h:12},{x:104,y:520,w:132,h:12},{x:272,y:520,w:54,h:12}],
+  traps:[{x:40,y:596,t:'fish'},{x:120,y:610,t:'fish'},{x:280,y:600,t:'fish'},{x:310,y:612,t:'fish'},{x:254,y:544,t:'bag'}],
+  quiz:{
+    q:'La première vague est passée et la mer se retire. Peux-tu redescendre ?',
+    opts:['Non, d’autres vagues peuvent arriver pendant des heures.','Oui, c’est fini.','Oui, pour récupérer mes affaires.'],
+    ok:0,
+    explain:'Un tsunami est une série de vagues. La première n’est pas toujours la plus grande. On reste en hauteur jusqu’à ce que les autorités lèvent l’alerte.'
+  },
+  fact:'Les tsunamis n’existent pas que dans les océans. Selon des études récentes, un tsunami a traversé le lac Léman en l’an 563, après un éboulement dans la vallée du Rhône. Le lac des Quatre-Cantons en a aussi connu, déclenchés par des séismes.'
+}
+];
+
+function inRect(r,x,y,rad){
+  const cx=Math.max(r.x,Math.min(x,r.x+r.w)), cy=Math.max(r.y,Math.min(y,r.y+r.h));
+  return (x-cx)*(x-cx)+(y-cy)*(y-cy)<rad*rad;
+}
+function hitsObstacle(L,x,y,rad){
+  for(const h of L.houses) if(inRect(h,x,y,rad)) return true;
+  for(const c of L.cars) if(inRect(c,x,y,rad)) return true;
+  for(const w of L.walls) if(inRect(w,x,y,rad)) return true;
+  for(const t of L.trees){ const dx=x-t.x, dy=y-t.y, rr=rad+t.r; if(dx*dx+dy*dy<rr*rr) return true; }
+  return false;
+}
+function stepPlayer(L,p,tx,ty,dist){
+  const dx=tx-p.x, dy=ty-p.y, d=Math.hypot(dx,dy);
+  if(d<0.5) return;
+  const k=Math.min(dist,d)/d, nx=p.x+dx*k, ny=p.y+dy*k;
+  if(!hitsObstacle(L,nx,ny,R)){p.x=nx;p.y=ny;}
+  else if(!hitsObstacle(L,nx,p.y,R)){p.x=nx;}
+  else if(!hitsObstacle(L,p.x,ny,R)){p.y=ny;}
+  p.x=Math.max(R,Math.min(XMAX,p.x)); p.y=Math.max(R,Math.min(H-12,p.y));
+}
+const speedAt=(L,y)=>L.speed*(1-0.3*altOf(y)/30);
+const newWave=()=>({y:SHORE+100,i:0,done:false});
+function advanceWave(wv,L,dt){
+  if(wv.done) return;
+  const sg=L.segs[wv.i], dir=sg.to<wv.y?-1:1;
+  wv.y+=dir*sg.speed*dt;
+  if((dir<0&&wv.y<=sg.to)||(dir>0&&wv.y>=sg.to)){ wv.y=sg.to; wv.i++; if(wv.i>=L.segs.length) wv.done=true; }
+}
+const shoreY=x=>SHORE+7*Math.sin(x*0.025)+4*Math.sin(x*0.08);
+const frontAt=(base,x,t)=>base+7*Math.sin(x*0.025)+4*Math.sin(x*0.08)+3*Math.sin(t*2+x*0.05)+(base>SHORE+2?4*Math.sin(x*0.11-t*3):0);
+/*LOGIC-END*/
+
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C={sand:'#EADFB6',seabed:'#CDBC90',seabed2:'#B6A378',ink:'#0D2A3B',safe:'#12915A',safeInk:'#0B6B42',
+  road:'#9AA8B0',roadEdge:'#7F8F99',alert:'#E8501F',warn:'#F2B705',
+  bands:['#DCE8C4','#CBDFAF','#B8D49A','#8CC593']};
+const MONO='"IBM Plex Mono",ui-monospace,monospace', DISP='"Big Shoulders Display",Impact,sans-serif';
+const ROOFS=['#C9694A','#7F95A8','#B8895A','#8FA37A','#A5707A'];
+
+const cv=$('#cv'), ctx=cv.getContext('2d'), stage=$('#stage'), modal=$('#modal');
+let layer=null, spx=1;
+
+const S={li:0,t:0,clock:0,state:'idle',phase:'',p:{x:0,y:0},tx:null,ty:null,down:false,wv:null,base:SHORE,
+  freeze:0,traps:0,lastTrap:'',minGap:1e9,endTimer:0,taken:new Set(),stars:[0,0,0],quizOk:[false,false,false],keys:new Set(),bannerKey:''};
+
+/* ---------- drawing helpers ---------- */
+function contourY(a,x){
+  const y0=SHORE-(a/30)*(SHORE-SAFE);
+  return (a>=30||a===0)?y0:y0+5*Math.sin(x*0.022+a*0.31)+3*Math.sin(x*0.07+a);
+}
+function rrect(g,x,y,w,h,r){g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();}
+
+function drawStatic(g,L){
+  g.fillStyle=C.bands[0]; g.fillRect(0,0,W,H);
+  [[10,C.bands[1]],[20,C.bands[2]],[30,C.bands[3]]].forEach(([a,col])=>{
+    g.beginPath(); g.moveTo(0,0); g.lineTo(W,0);
+    for(let x=W;x>=0;x-=6) g.lineTo(x,contourY(a,x));
+    g.closePath(); g.fillStyle=col; g.fill();
+  });
+  g.save(); g.beginPath(); g.rect(0,0,W,SAFE); g.clip();
+  g.strokeStyle='rgba(255,255,255,.3)'; g.lineWidth=2;
+  for(let i=-SAFE;i<W+SAFE;i+=14){ g.beginPath(); g.moveTo(i,SAFE); g.lineTo(i+SAFE,0); g.stroke(); }
+  g.restore();
+  g.font='800 46px '+DISP; g.textAlign='center'; g.fillStyle='rgba(11,107,66,.28)'; g.fillText('ZONE SÛRE',W/2-10,88);
+  // contour lines
+  g.lineWidth=1; g.strokeStyle='rgba(13,42,59,.3)';
+  [10,20].forEach(a=>{ g.beginPath(); for(let x=0;x<=W;x+=6){ const y=contourY(a,x); x?g.lineTo(x,y):g.moveTo(x,y);} g.stroke();
+    g.font='500 9px '+MONO; g.textAlign='left'; g.fillStyle='rgba(13,42,59,.65)'; g.fillText(a+' m',6,contourY(a,6)-3); });
+  // beach
+  g.beginPath(); for(let x=0;x<=W;x+=6) g.lineTo(x,shoreY(x)-18); for(let x=W;x>=0;x-=6) g.lineTo(x,shoreY(x)+2); g.closePath(); g.fillStyle=C.sand; g.fill();
+  // roads
+  L.bands.forEach(b=>{ g.fillStyle=C.road; g.fillRect(b.x,b.y,b.w,b.h); g.fillStyle=C.roadEdge; g.fillRect(b.x,b.y,b.w,3); g.fillRect(b.x,b.y+b.h-3,b.w,3);
+    g.setLineDash([12,10]); g.strokeStyle='rgba(255,255,255,.65)'; g.lineWidth=2; g.beginPath(); g.moveTo(b.x,b.y+b.h/2); g.lineTo(b.x+b.w,b.y+b.h/2); g.stroke(); g.setLineDash([]); });
+  L.roads.forEach(pl=>{
+    g.lineJoin='round'; g.lineCap='round';
+    g.strokeStyle=C.roadEdge; g.lineWidth=30; g.beginPath(); pl.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])); g.stroke();
+    g.strokeStyle=C.road; g.lineWidth=25; g.beginPath(); pl.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])); g.stroke();
+    g.setLineDash([10,10]); g.strokeStyle='rgba(255,255,255,.6)'; g.lineWidth=2; g.beginPath(); pl.forEach((q,i)=>i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])); g.stroke(); g.setLineDash([]);
+  });
+  // seawall
+  L.walls.forEach(w=>{ g.fillStyle='rgba(13,42,59,.2)'; g.fillRect(w.x+2,w.y+3,w.w,w.h); g.fillStyle='#8696A0'; g.fillRect(w.x,w.y,w.w,w.h); g.fillStyle='#B5C2CA'; g.fillRect(w.x,w.y,w.w,4); });
+  // houses
+  L.houses.forEach((h,i)=>{
+    g.fillStyle='rgba(13,42,59,.2)'; g.fillRect(h.x+3,h.y+4,h.w,h.h);
+    g.fillStyle='#E9E2D3'; g.fillRect(h.x,h.y,h.w,h.h);
+    g.fillStyle=ROOFS[i%ROOFS.length]; g.fillRect(h.x+3,h.y+3,h.w-6,h.h-6);
+    g.strokeStyle='rgba(255,255,255,.4)'; g.lineWidth=2; g.beginPath();
+    if(h.w>=h.h){ g.moveTo(h.x+5,h.y+h.h/2); g.lineTo(h.x+h.w-5,h.y+h.h/2);} else { g.moveTo(h.x+h.w/2,h.y+5); g.lineTo(h.x+h.w/2,h.y+h.h-5);} g.stroke();
+  });
+  // cars
+  L.cars.forEach(c=>{
+    g.fillStyle='rgba(13,42,59,.25)'; rrect(g,c.x+2,c.y+3,c.w,c.h,5); g.fill();
+    g.fillStyle=c.c; rrect(g,c.x,c.y,c.w,c.h,5); g.fill();
+    g.fillStyle='rgba(255,255,255,.55)'; g.fillRect(c.x+9,c.y+3,7,c.h-6); g.fillRect(c.x+23,c.y+4,4,c.h-8);
+  });
+  // trees
+  L.trees.forEach(t=>{
+    g.fillStyle='rgba(13,42,59,.2)'; g.beginPath(); g.arc(t.x+3,t.y+4,t.r,0,6.3); g.fill();
+    g.fillStyle='#3C8A57'; g.beginPath(); g.arc(t.x,t.y,t.r,0,6.3); g.fill();
+    g.fillStyle='#5BAE72'; g.beginPath(); g.arc(t.x-2,t.y-2,t.r*.55,0,6.3); g.fill();
+  });
+  // evacuation sign
+  if(L.sign){ const s=L.sign; g.strokeStyle=C.ink; g.lineWidth=2; g.beginPath(); g.moveTo(s.x,s.y); g.lineTo(s.x,s.y+14); g.stroke();
+    g.fillStyle='#1E6FA3'; rrect(g,s.x-12,s.y-26,24,28,4); g.fill(); g.strokeStyle='#fff'; g.lineWidth=2; g.stroke();
+    g.strokeStyle='#fff'; g.lineWidth=3; g.lineCap='round'; g.beginPath(); g.moveTo(s.x,s.y-6); g.lineTo(s.x,s.y-20); g.moveTo(s.x-6,s.y-14); g.lineTo(s.x,s.y-21); g.lineTo(s.x+6,s.y-14); g.stroke(); }
+  // safe line + flag
+  g.setLineDash([9,6]); g.strokeStyle=C.safeInk; g.lineWidth=3.5; g.beginPath(); g.moveTo(0,SAFE); g.lineTo(W,SAFE); g.stroke(); g.setLineDash([]);
+  g.font='600 10px '+MONO; g.textAlign='left'; g.fillStyle=C.safeInk; g.fillText('30 m',6,SAFE-6);
+  g.strokeStyle=C.ink; g.lineWidth=2; g.beginPath(); g.moveTo(190,66); g.lineTo(190,108); g.stroke();
+  g.fillStyle=C.safe; g.beginPath(); g.moveTo(190,66); g.lineTo(214,74); g.lineTo(190,83); g.closePath(); g.fill();
+}
+
+function buildLayer(){
+  const L=LEVELS[S.li]; if(!cv.width) return;
+  layer=document.createElement('canvas'); layer.width=cv.width; layer.height=cv.height;
+  const g=layer.getContext('2d'); const k=cv.width/W; g.setTransform(k,0,0,k,0,0); drawStatic(g,L);
+}
+function fit(){
+  const sw=stage.clientWidth, sh=stage.clientHeight; if(!sw||!sh) return;
+  spx=Math.min(sw/W,sh/H); const dpr=Math.min(window.devicePixelRatio||1,3);
+  const cw=Math.floor(W*spx), ch=Math.floor(H*spx);
+  cv.style.width=cw+'px'; cv.style.height=ch+'px'; cv.width=Math.floor(cw*dpr); cv.height=Math.floor(ch*dpr);
+  buildLayer();
+}
+if(window.ResizeObserver) new ResizeObserver(fit).observe(stage); else window.addEventListener('resize',fit);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(buildLayer);
+
+function drawTrap(t,clock){
+  const pr=14+2*Math.sin(clock*5+t.x);
+  ctx.strokeStyle=C.warn; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(t.x,t.y,pr,0,6.3); ctx.stroke();
+  ctx.fillStyle='rgba(242,183,5,.25)'; ctx.fill();
+  if(t.t==='fish'){
+    ctx.fillStyle='#F28A3C'; ctx.beginPath(); ctx.ellipse(t.x-1,t.y,8,4.5,0,0,6.3); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(t.x+6,t.y); ctx.lineTo(t.x+12,t.y-5); ctx.lineTo(t.x+12,t.y+5); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=C.ink; ctx.beginPath(); ctx.arc(t.x-5,t.y-1,1.2,0,6.3); ctx.fill();
+  } else {
+    ctx.fillStyle='#8C5A32'; rrect(ctx,t.x-8,t.y-5,16,12,2); ctx.fill();
+    ctx.strokeStyle='#5E3A1C'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(t.x-3,t.y-5); ctx.lineTo(t.x-3,t.y-9); ctx.lineTo(t.x+3,t.y-9); ctx.lineTo(t.x+3,t.y-5); ctx.stroke();
+  }
+}
+
+function render(){
+  const L=LEVELS[S.li]; const k=cv.width/W;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.setTransform(k,0,0,k,0,0);
+  if(S.phase==='quake'&&S.state==='run'&&!reduce) ctx.translate((Math.random()-.5)*5,(Math.random()-.5)*5);
+  if(layer) ctx.drawImage(layer,0,0,W,H);
+  // seabed
+  let gr=ctx.createLinearGradient(0,SHORE,0,H); gr.addColorStop(0,C.seabed); gr.addColorStop(1,C.seabed2);
+  ctx.beginPath(); ctx.moveTo(0,H+20); for(let x=0;x<=W;x+=6) ctx.lineTo(x,shoreY(x)); ctx.lineTo(W,H+20); ctx.closePath(); ctx.fillStyle=gr; ctx.fill();
+  // traps
+  L.traps.forEach((t,i)=>{ if(!S.taken.has(i)) drawTrap(t,S.clock); });
+  // water
+  ctx.beginPath(); ctx.moveTo(0,H+20); for(let x=0;x<=W;x+=4) ctx.lineTo(x,frontAt(S.base,x,S.clock)); ctx.lineTo(W,H+20); ctx.closePath();
+  gr=ctx.createLinearGradient(0,S.base-20,0,Math.max(S.base+170,H)); gr.addColorStop(0,'rgba(56,144,194,.93)'); gr.addColorStop(1,'rgba(15,76,117,.96)');
+  ctx.fillStyle=gr; ctx.fill();
+  const crest=(off,w,a)=>{ ctx.beginPath(); for(let x=0;x<=W;x+=4){ const y=frontAt(S.base,x,S.clock)+off+(off?3*Math.sin(x*.06+S.clock*2):0); x?ctx.lineTo(x,y):ctx.moveTo(x,y);} ctx.strokeStyle='rgba(244,250,252,'+a+')'; ctx.lineWidth=w; ctx.stroke(); };
+  crest(0,14,.2); crest(0,5,.95); crest(18,2,.28); crest(38,2,.2);
+  // target
+  if(S.tx!=null&&S.state==='run'&&Math.hypot(S.tx-S.p.x,S.ty-S.p.y)>8){
+    ctx.setLineDash([3,4]); ctx.strokeStyle='rgba(13,42,59,.65)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(S.tx,S.ty,8,0,6.3); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // player
+  const p=S.p, frozen=S.freeze>0;
+  ctx.fillStyle='rgba(13,42,59,.28)'; ctx.beginPath(); ctx.ellipse(p.x+2,p.y+4,R,R*.7,0,0,6.3); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.5; ctx.fillStyle=frozen?'#F6A58A':C.alert;
+  ctx.beginPath(); ctx.arc(p.x,p.y,R+1,0,6.3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#F6D7B5'; ctx.beginPath(); ctx.arc(p.x,p.y,3.8,0,6.3); ctx.fill();
+  if(S.state==='run'&&S.t<.1){ ctx.strokeStyle=C.warn; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,16,0,6.3); ctx.stroke(); }
+  // altitude gauge
+  const gx=350, top=SAFE, bot=SHORE;
+  ctx.fillStyle='rgba(246,249,251,.9)'; rrect(ctx,gx-17,top-10,28,bot-top+20,6); ctx.fill();
+  ctx.strokeStyle=C.ink; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(gx,top); ctx.lineTo(gx,bot); ctx.stroke();
+  ctx.font='600 8px '+MONO; ctx.textAlign='right'; ctx.fillStyle=C.ink;
+  for(let a=0;a<=30;a+=5){ const y=bot-(a/30)*(bot-top); ctx.beginPath(); ctx.moveTo(gx-(a%10===0?7:4),y); ctx.lineTo(gx,y); ctx.stroke(); if(a%10===0) ctx.fillText(String(a),gx-9,y+3); }
+  const my=bot-(altOf(p.y)/30)*(bot-top);
+  ctx.fillStyle=C.alert; ctx.beginPath(); ctx.moveTo(gx+1,my); ctx.lineTo(gx+9,my-5); ctx.lineTo(gx+9,my+5); ctx.closePath(); ctx.fill();
+}
+
+/* ---------- HUD, banner, toast ---------- */
+let lastHud='';
+function hud(){
+  const L=LEVELS[S.li]; let txt='—',cls='';
+  if(S.state==='won'||S.state==='done'){txt='Sauvé'; cls='ok';}
+  else if(S.phase==='wave'&&S.wv&&!S.wv.done){
+    const sg=L.segs[S.wv.i];
+    if(sg.to<S.base-0.5){ const gap=frontAt(S.base,S.p.x,S.clock)-S.p.y, tm=Math.max(0,gap/sg.speed);
+      txt=tm.toFixed(1).replace('.',',')+' s'; cls=tm>3?'ok':tm>1.5?'warn':'bad'; }
+    else { txt='Accalmie'; cls='warn'; }
+  }
+  const alt=Math.round(altOf(S.p.y))+' m', key=txt+cls+alt+S.li;
+  if(key===lastHud) return; lastHud=key;
+  $('#h-level').textContent=(S.li+1)+'/3'; $('#h-alt').textContent=alt; $('#h-wave-v').textContent=txt;
+  $('#h-wave').className='cell '+cls;
+}
+function setBanner(text,cls){
+  const b=$('#banner'); if(!text){b.hidden=true; return;}
+  b.textContent=text; b.className='banner '+(cls||''); b.hidden=false;
+}
+let toastTimer=0;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{t.hidden=true;},2400); }
+
+/* ---------- level flow ---------- */
+function loadLevel(i){
+  S.li=i; const L=LEVELS[i];
+  Object.assign(S,{t:0,state:'idle',phase:'',p:{x:L.start.x,y:L.start.y},tx:null,ty:null,down:false,wv:null,base:SHORE,
+    freeze:0,traps:0,lastTrap:'',minGap:1e9,endTimer:0,taken:new Set(),bannerKey:''});
+  setBanner(''); $('#toast').hidden=true; lastHud=''; buildLayer();
+}
+function begin(){ hideModal(); S.state='run'; S.t=0; }
+function showModal(html){ modal.innerHTML='<div class="card">'+html+'</div>'; modal.hidden=false; modal.scrollTop=0; }
+function hideModal(){ modal.hidden=true; modal.innerHTML=''; }
+
+function showIntro(){
+  const L=LEVELS[S.li];
+  showModal(`<div class="stripe"></div><p class="eyebrow">Niveau ${S.li+1} sur 3</p><h2>${L.name}</h2>
+    <p>${L.intro}</p><p class="goal"><b>Objectif.</b> ${L.goal}</p><p class="hint">${L.hint}</p>
+    <button class="btn block" type="button" data-act="go">C’est parti</button>`);
+}
+const star=f=>`<svg class="star${f?' on':''}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3 6.1 20.6l1.3-6.6L2.5 9.4l6.6-.8z"/></svg>`;
+function showResult(){
+  const L=LEVELS[S.li], q=L.quiz;
+  const noTrap=S.traps===0, gapOk=S.minGap>=L.gapStar, n=1+(noTrap?1:0)+(gapOk?1:0);
+  S.stars[S.li]=n;
+  const last=S.li===LEVELS.length-1;
+  showModal(`<div class="stripe ok"></div><p class="eyebrow">Niveau ${S.li+1} réussi</p><h2>En sécurité !</h2>
+    <div class="stars" aria-label="${n} étoiles sur 3">${star(1)}${star(n>=2)}${star(n>=3)}</div>
+    <ul class="checks"><li>Tu as dépassé la ligne des 30 m</li>
+      <li class="${noTrap?'':'no'}">${noTrap?'Tu n’es tombé dans aucun piège':'Tu as perdu du temps dans un piège'}</li>
+      <li class="${gapOk?'':'no'}">${gapOk?'Tu as gardé de l’avance sur la vague':'La vague était tout près de toi'}</li></ul>
+    <p class="q-label">Question</p><p class="q">${q.q}</p>
+    ${q.opts.map((o,i)=>`<button class="opt" type="button" data-act="opt" data-i="${i}"><span class="l">${'ABC'[i]}</span><span>${o}</span></button>`).join('')}
+    <div class="after" id="after" hidden>
+      <p class="verdict" id="verdict"></p><p>${q.explain}</p>
+      <div class="fact"><span class="tag">Le savais-tu ?</span><p>${L.fact}</p></div>
+      <button class="btn block" type="button" data-act="next">${last?'Voir le bilan':'Niveau suivant'}</button>
+    </div>`);
+}
+function showLost(){
+  const L=LEVELS[S.li];
+  let tip=L.lostTip;
+  if(S.traps>0) tip=(S.lastTrap==='bag'?'Tu as perdu du temps à cause d’un objet. En cas d’évacuation, on laisse ses affaires : seule ta vie compte.':'Tu as perdu du temps sur la plage. Quand la mer se retire, il ne faut jamais aller voir : c’est le signe que la vague arrive.');
+  showModal(`<div class="stripe bad"></div><p class="eyebrow">Niveau ${S.li+1}</p><h2>La vague t’a rattrapé</h2>
+    <p>${tip}</p><p class="hint">Les pièges apparaissent en jaune. Contourne-les et ne t’arrête jamais.</p>
+    <button class="btn block" type="button" data-act="retry">Réessayer</button>`);
+}
+function showEnd(){
+  const total=S.stars.reduce((a,b)=>a+b,0), qok=S.quizOk.filter(Boolean).length;
+  $('#play').hidden=true; const e=$('#end'); e.hidden=false;
+  e.innerHTML=`<p class="eyebrow">Bilan</p><h1>Bien<br><em>joué</em></h1>
+    <div class="score"><div><span class="k">Étoiles</span><span class="v">${total} / 9</span></div><div><span class="k">Questions justes</span><span class="v">${qok} / 3</span></div></div>
+    <p class="eyebrow">À retenir</p>
+    <ol class="rules">
+      <li><span class="n">1</span><span><b>Reconnais les signes.</b>Forte secousse ou mer qui se retire : pars tout de suite, sans attendre l’alerte.</span></li>
+      <li><span class="n">2</span><span><b>Monte en hauteur.</b>Vise au moins 30 m d’altitude, ou éloigne-toi loin à l’intérieur des terres.</span></li>
+      <li><span class="n">3</span><span><b>Pars à pied, sans tes affaires.</b>Les routes se bloquent et chaque seconde compte.</span></li>
+      <li><span class="n">4</span><span><b>Reste en haut.</b>Il y a plusieurs vagues. Attends que les autorités lèvent l’alerte.</span></li>
+    </ol>
+    <div class="fact"><span class="tag">Au Japon, en 2011</span><p>Dans la ville de Kamaishi, presque tous les élèves se sont sauvés parce qu’ils avaient appris à courir vers les hauteurs sans attendre.</p></div>
+    <button class="btn block" type="button" id="btn-again">Rejouer</button>`;
+  $('#btn-again').addEventListener('click',()=>{ e.hidden=true; S.stars=[0,0,0]; S.quizOk=[false,false,false]; $('#play').hidden=false; fit(); loadLevel(0); showIntro(); });
+  e.scrollTop=0;
+}
+
+modal.addEventListener('click',ev=>{
+  const b=ev.target.closest('[data-act]'); if(!b) return; const act=b.dataset.act;
+  if(act==='go') begin();
+  else if(act==='retry'){ loadLevel(S.li); begin(); }
+  else if(act==='opt'){
+    const q=LEVELS[S.li].quiz, i=+b.dataset.i, good=i===q.ok;
+    S.quizOk[S.li]=good;
+    modal.querySelectorAll('.opt').forEach((o,j)=>{ o.disabled=true; if(j===q.ok) o.classList.add('right'); else if(j===i) o.classList.add('wrong'); });
+    $('#verdict').textContent=good?'Bonne réponse !':'Pas tout à fait.';
+    const a=$('#after'); a.hidden=false; a.scrollIntoView({block:'nearest',behavior:reduce?'auto':'smooth'});
+  }
+  else if(act==='next'){ if(S.li>=LEVELS.length-1) showEnd(); else { loadLevel(S.li+1); showIntro(); } }
+});
+$('#btn-play').addEventListener('click',()=>{
+  $('#start').hidden=true; $('#play').hidden=false; fit(); loadLevel(0); showIntro();
+});
+
+/* ---------- input ---------- */
+function setTarget(e){ const r=cv.getBoundingClientRect(); S.tx=(e.clientX-r.left)/r.width*W; S.ty=(e.clientY-r.top)/r.height*H; }
+cv.addEventListener('pointerdown',e=>{ if(S.state!=='run') return; e.preventDefault(); try{cv.setPointerCapture(e.pointerId);}catch(_){} S.down=true; setTarget(e); });
+cv.addEventListener('pointermove',e=>{ if(S.down&&S.state==='run') setTarget(e); });
+['pointerup','pointercancel'].forEach(n=>cv.addEventListener(n,()=>{S.down=false;}));
+const KEYMAP={ArrowLeft:'l',a:'l',q:'l',ArrowRight:'r',d:'r',ArrowUp:'u',w:'u',z:'u',ArrowDown:'d',s:'d'};
+window.addEventListener('keydown',e=>{ const k=KEYMAP[e.key]; if(k&&S.state==='run'){ S.keys.add(k); e.preventDefault(); } });
+window.addEventListener('keyup',e=>{ const k=KEYMAP[e.key]; if(k){ S.keys.delete(k); if(!S.keys.size) S.tx=null; } });
+
+/* ---------- simulation ---------- */
+function setPhaseBanner(){
+  const L=LEVELS[S.li]; let key='',text='',cls='';
+  if(S.state==='won'||S.state==='done'){ key='won'; text='En sécurité !'; cls='ok'; }
+  else if(S.phase==='quake'){ key='q'; text='Forte secousse ! Cours vers les hauteurs'; cls='pulse'; }
+  else if(S.phase==='retreat'){ key='r'; text='La mer se retire… ne va pas voir !'; cls='pulse'; }
+  else if(S.phase==='wave'&&S.wv){
+    const sg=L.segs[Math.min(S.wv.i,L.segs.length-1)], adv=!S.wv.done&&sg.to<S.base-0.5;
+    if(S.wv.done){ key='hold'; text=''; }
+    else if(adv){ key='a'+S.wv.i; text=S.wv.i===0?'La vague arrive !':'Nouvelle vague, plus haute !'; cls='pulse'; }
+    else { key='c'+S.wv.i; text='Accalmie… Ce n’est pas fini !'; }
+  }
+  if(key===S.bannerKey) return; S.bannerKey=key; setBanner(text,cls);
+}
+function update(dt){
+  const L=LEVELS[S.li]; S.t+=dt;
+  const startWave=L.quake+L.retreat;
+  if(S.t<L.quake){ S.phase='quake'; S.base=SHORE; }
+  else if(S.t<startWave){ S.phase='retreat'; const pr=(S.t-L.quake)/L.retreat; S.base=SHORE+100*pr*pr*(3-2*pr); }
+  else { S.phase='wave'; if(!S.wv) S.wv=newWave(); advanceWave(S.wv,L,dt); S.base=S.wv.y; }
+
+  if(S.state==='run'){
+    if(S.freeze>0) S.freeze-=dt;
+    else {
+      if(S.keys.size){ const dx=(S.keys.has('r')?1:0)-(S.keys.has('l')?1:0), dy=(S.keys.has('d')?1:0)-(S.keys.has('u')?1:0); S.tx=S.p.x+dx*60; S.ty=S.p.y+dy*60; }
+      if(S.tx!=null){ const sp=speedAt(L,S.p.y)*(S.phase==='quake'?0.65:1); stepPlayer(L,S.p,S.tx,S.ty,sp*dt); }
+    }
+    L.traps.forEach((t,i)=>{
+      if(S.taken.has(i)) return;
+      if(Math.hypot(S.p.x-t.x,S.p.y-t.y)<TRAP_R+R){
+        S.taken.add(i); S.traps++; S.lastTrap=t.t; S.freeze=1.3;
+        toast(t.t==='bag'?'Piège ! Laisse tes affaires, monte.':'Piège ! Ne va jamais voir la mer qui se retire.');
+      }
+    });
+    if(S.p.y<=SAFE){ S.state='won'; S.endTimer=1.8; S.tx=null; }
+    else if(S.phase==='wave'){
+      const gap=frontAt(S.base,S.p.x,S.clock)-S.p.y; S.minGap=Math.min(S.minGap,gap);
+      if(gap<=2){ S.state='losing'; S.endTimer=0.9; S.tx=null; setBanner(''); }
+    }
+  } else if(S.state==='won'){ S.endTimer-=dt; if(S.endTimer<=0){ S.state='done'; showResult(); } }
+  else if(S.state==='losing'){ S.endTimer-=dt; if(S.endTimer<=0){ S.state='lost'; showLost(); } }
+  if(S.state!=='losing'&&S.state!=='lost') setPhaseBanner();
+}
+
+let last=0;
+function loop(ts){
+  const dt=Math.min(0.05,(ts-last)/1000||0.016); last=ts;
+  if(!$('#play').hidden){
+    S.clock+=dt;
+    if(S.state==='run'||S.state==='won'||S.state==='losing') update(dt);
+    render(); hud();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- teacher QR ---------- */
+$('#qr-make').addEventListener('click',()=>{
+  const v=$('#qr-url').value.trim(), box=$('#qr-box'), msg=$('#qr-msg');
+  box.innerHTML=''; msg.textContent='';
+  if(!/^https?:\/\/\S+$/i.test(v)){ msg.textContent='Colle un lien complet qui commence par https://'; return; }
+  if(!window.QRCode){ msg.textContent='Le générateur de QR code n’a pas pu se charger. Utilise un générateur en ligne avec ce même lien.'; return; }
+  try{
+    new QRCode(box,{text:v,width:220,height:220,colorDark:'#0D2A3B',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+    msg.textContent='Projette ce code : les élèves le scannent avec l’appareil photo de leur téléphone.';
+  }catch(err){ box.innerHTML=''; msg.textContent='Ce lien est trop long pour un QR code.'; }
+});
+})();
+</script>
